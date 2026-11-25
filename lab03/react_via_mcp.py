@@ -16,6 +16,7 @@ import sys
 
 from dotenv import load_dotenv
 from litellm import acompletion
+from litellm.exceptions import BadRequestError
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -36,27 +37,51 @@ def parse(text: str):
     return m.group(1).strip(), m.group(2).strip()
 
 
+async def call_model(messages) -> str:
+    """Call the model. If Groq rejects a native tool call (tool_use_failed), convert
+    the call it tried to make back into ReAct text, so the text protocol still works."""
+    try:
+        resp = await acompletion(model=MODEL, messages=messages, temperature=0,
+                                 stop=["Observation:"])
+        return resp.choices[0].message.content or ""
+    except BadRequestError as e:
+        text = str(e)
+        key = '"failed_generation":'
+        i = text.find(key)
+        if i == -1:
+            raise
+        try:
+            raw, _ = json.JSONDecoder().raw_decode(text[i + len(key):].lstrip())
+            call = json.loads(raw)
+            return (f"Thought: I should call {call['name']}.\n"
+                    f"Action: {call['name']}\n"
+                    f"Action Input: {json.dumps(call.get('arguments', {}))}")
+        except Exception:
+            raise e
+
+
 def build_prompt(tools) -> str:
     lines = []
     for t in tools:
         props = t.inputSchema.get("properties", {})
         required = set(t.inputSchema.get("required", []))
-        args = ", ".join(f"{k}: {v.get('type', 'any')}{'' if k in required else ' (optional)'}"
-                         for k, v in props.items())
+        args = ", ".join(f"{k} ({v.get('type', 'any')}{'' if k in required else ', optional'})"
+                         for k, v in props.items()) or "none"
         desc = " ".join((t.description or "").split())
-        lines.append(f"- {t.name}({args}): {desc}")
+        lines.append(f"- Tool name: {t.name} | JSON keys: {args} | Use: {desc}")
     tool_block = "\n".join(lines)
     return f"""You are a pharmacy stock assistant that solves problems step by step.
 
 Tools:
 {tool_block}
-- finish(answer): give the final answer to the user.
+- Tool name: finish | Use: give the final answer to the user as plain text.
 
 On EVERY step reply in exactly this format:
 Thought: <your reasoning>
 Action: <one tool name from the list above, or finish>
 Action Input: <a JSON object with the tool's arguments, e.g. {{"item": "amoxicillin"}}; for finish just the answer text>
 
+You have NO native function calling. Reply with plain text only, in the format above.
 Rules: use one action per reply. Never write an Observation yourself. Never invent stock
 or prices. Only call record_sale if the user explicitly asks to record a sale."""
 
@@ -84,9 +109,7 @@ async def run_agent(session: ClientSession, tools, question: str, max_steps: int
 
     final = "Stopped: reached max_steps without a final answer."
     for _ in range(max_steps):
-        resp = await acompletion(model=MODEL, messages=messages, temperature=0,
-                                 stop=["Observation:"])
-        reply = resp.choices[0].message.content or ""
+        reply = await call_model(messages)
         emit(reply.strip())
         messages.append({"role": "assistant", "content": reply})
 
