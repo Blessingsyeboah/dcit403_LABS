@@ -13,6 +13,7 @@ Run it:
     python lab02/react_agent.py "your question here"
 """
 
+import json
 import os
 import re
 import sys
@@ -61,20 +62,38 @@ Rules:
 - Never guess facts. Use wiki_lookup.
 - Use only one tool per step, then wait for the Observation.
 - If you don't need a tool, go straight to finish.
+- Write plain text only. Do NOT use the API's function-calling or tool-calling feature.
 """
 
 # ---------------------------------------------------------------
 # Step 3b: the parser
 # ---------------------------------------------------------------
 # Finds "Action: something" followed by "Action Input: something".
-ACTION_RE = re.compile(r"Action:\s*(\w+)\s*Action Input:\s*(.*)", re.DOTALL)
+
+
+ACTION_RE = re.compile(
+    r"Action:\s*(\w+)\s*Action Input:\s*(.*)",
+    re.DOTALL | re.IGNORECASE
+)
 
 
 def parse(text):
+    # Check for the standard ReAct format.
     m = ACTION_RE.search(text)
-    if not m:
-        return None, None
-    return m.group(1).strip(), m.group(2).strip()
+
+    if m:
+        return m.group(1).strip().lower(), m.group(2).strip()
+
+    # Check whether the model directly returned Finish:.
+    m = re.search(
+        r"(?im)^\s*Finish:\s*(.+)",
+        text
+    )
+
+    if m:
+        return "finish", m.group(1).strip()
+
+    return None, None
 
 
 # ---------------------------------------------------------------
@@ -90,6 +109,24 @@ def ask_model(messages):
         stop=["Observation:"],
     )
     return resp.choices[0].message.content or ""
+
+
+# ---------------------------------------------------------------
+# Rescue: some models (like gpt-oss on Groq) insist on making a native
+# tool call instead of writing plain text. The API rejects the call, but
+# the error message still contains what the model wanted to do.
+# We read it out and turn it into a normal Action line.
+# ---------------------------------------------------------------
+def rescue_native_call(error):
+    try:
+        text = str(error)
+        data, _ = json.JSONDecoder().raw_decode(text[text.index("{"):])
+        call = json.loads(data["error"]["failed_generation"])
+        name = call["name"]
+        value = list(call["arguments"].values())[0]
+        return f"Thought: (the model made a native tool call)\nAction: {name}\nAction Input: {value}"
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------
@@ -127,9 +164,13 @@ def run_agent(question, max_steps=6):
         try:
             reply = ask_model(messages)
         except Exception as e:
-            log(f"Model error: {e}")
-            answer = "Sorry, I could not reach the model."
-            break
+            reply = rescue_native_call(e)
+            if reply:
+                log("(the model made a native tool call, so we read it from the error)")
+            else:
+                log(f"Model error: {e}")
+                answer = "Sorry, I could not reach the model."
+                break
 
         log(reply.strip())
         messages.append({"role": "assistant", "content": reply})

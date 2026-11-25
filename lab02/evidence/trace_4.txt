@@ -1,0 +1,11 @@
+Question: Tell me about the Wikipedia page for the Zorblax Market Union.
+
+--- Step 1 ---
+Model error: litellm.UnsupportedParamsError: gemini does not support parameters: ['temperature'], for model=gemini-3.5-flash-lite. To drop these, set `litellm.drop_params=True` or for proxy:
+
+`litellm_settings:
+ drop_params: true`
+. 
+ If you want to use these params dynamically send allowed_openai_params=['temperature'] in your request.
+
+Final answer: Sorry, I could not reach the model.

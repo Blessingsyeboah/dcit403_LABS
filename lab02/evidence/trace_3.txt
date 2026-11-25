@@ -1,0 +1,11 @@
+Question: Find out what Cape Coast is known for, then work out the cost of 7 boxes of fish at GHS 130 each.
+
+--- Step 1 ---
+Model error: litellm.UnsupportedParamsError: gemini does not support parameters: ['temperature'], for model=gemini-3.5-flash-lite. To drop these, set `litellm.drop_params=True` or for proxy:
+
+`litellm_settings:
+ drop_params: true`
+. 
+ If you want to use these params dynamically send allowed_openai_params=['temperature'] in your request.
+
+Final answer: Sorry, I could not reach the model.
