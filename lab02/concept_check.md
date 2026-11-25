@@ -1,23 +1,53 @@
-# Lab 2: Architectures: A ReAct Agent From Scratch: Concept Check
+# Lab 02: Concept Check
 
-Answer in your own words before the Wednesday session (independent work). Your answers feed Section 2 of your lab report (Concept and classical root).
+> These are draft answers to get you started. Read each one, make sure you
+> understand it, then rewrite it in your own words before you submit.
 
-## Q1. Classify a thermostat, a chess engine and a ReAct agent as reactive, deliberative or hybrid, with one reason each.
+## 1. Thermostat, chess engine, ReAct agent
 
-_Your answer:_
+**Thermostat: reactive.** It has a simple rule ("if the room is too cold, turn
+the heating on") and responds straight away to what it senses. It has no memory
+and no plan.
 
+**Chess engine: deliberative.** It keeps a model of the board, thinks ahead
+through possible moves, and picks the move that best serves its goal of
+winning. It plans before it acts.
 
-## Q2. In the trace above, which lines are percepts, and which are actions?
+**ReAct agent: hybrid.** It reacts to every new Observation, which is the
+reactive part. But the Thoughts let it plan across several steps, which is the
+deliberative part. It has both layers.
 
-_Your answer:_
+## 2. Percepts and actions in the trace
 
+**Percepts** are the things the agent senses from the outside world: the
+trader's question, and each **Observation** line (`Observation: 1025` and
+`Observation: 175`).
 
-## Q3. Why do we pass `stop=["Observation:"]` when calling the model?
+**Actions** are the things the agent does to the world: each
+**Action / Action Input** pair (the two calculator calls and the final
+`finish` with the answer).
 
-_Your answer:_
+The **Thought** lines are neither. They're the agent's private reasoning
+between sensing and acting.
 
+## 3. Why `stop=["Observation:"]`?
 
-## Q4. Map the trace above to the BDI terms belief, desire and intention.
+A language model just keeps writing the most likely next text. If we didn't stop
+it, it would write the tool result itself, and it would make up a number
+instead of using the real one. The stop sequence makes it pause right after
+the Action Input. Then our code runs the real tool and supplies the real
+Observation. That way the model decides *what* to compute, but never *fakes*
+the answer.
 
-_Your answer:_
+## 4. The trace as beliefs, desires and intentions
 
+**Belief:** what the agent holds true right now: the budget (GHS 1,200), the
+prices, and the results so far (the total cost is 1025). In a ReAct agent,
+this is the whole conversation, including every Observation.
+
+**Desire:** the goal the agent wants to achieve: tell the trader how much money
+they will have left.
+
+**Intention:** the plan the agent has committed to: first work out the total
+cost, then subtract it from the budget, then give the answer. The agent
+writes this plan in its Thought lines.
